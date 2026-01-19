@@ -1,0 +1,5 @@
+[install]
+# Bun configuration
+
+# Path aliases - Bun reads tsconfig.json paths automatically,
+# but we can also configure here if needed
