@@ -7,6 +7,10 @@
     "dev": "bun run src/index.ts",
     "start": "bun run src/index.ts",
     "replay": "bun run src/utils/replay.ts",
+    "migrate": "bun run src/infrastructure/database/migrate.ts",
+    "migrate:up": "bun run src/infrastructure/database/migrate.ts up",
+    "migrate:down": "bun run src/infrastructure/database/migrate.ts down",
+    "migrate:status": "bun run src/infrastructure/database/migrate.ts status",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json}\"",
@@ -23,6 +27,7 @@
     "hono": "^4.0.0",
     "zod": "^3.22.4",
     "@hono/zod-validator": "^0.2.1",
+    "@hono/swagger-ui": "^0.2.0",
     "pg": "^8.11.0",
     "ioredis": "^5.3.2",
     "dotenv": "^16.3.1"
