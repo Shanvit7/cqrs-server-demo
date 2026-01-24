@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "start": "bun run src/index.ts",
+    "replay": "bun run src/utils/replay.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json}\"",
@@ -21,10 +22,14 @@
   "dependencies": {
     "hono": "^4.0.0",
     "zod": "^3.22.4",
-    "@hono/zod-validator": "^0.2.1"
+    "@hono/zod-validator": "^0.2.1",
+    "pg": "^8.11.0",
+    "ioredis": "^5.3.2",
+    "dotenv": "^16.3.1"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/pg": "^8.10.0",
     "@eslint/js": "^9.17.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",

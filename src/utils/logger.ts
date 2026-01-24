@@ -1,3 +1,4 @@
+// UTILS
 import { isProduction } from '@/utils/constants';
 
 const logger = {
