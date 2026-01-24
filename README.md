@@ -25,6 +25,8 @@ This project implements a full CQRS + Event Sourcing architecture:
 - **Bun**: Runtime and package manager
 - **Hono**: Fast web framework
 - **Zod**: Schema validation
+- **@hono/zod-validator**: Request validation middleware
+- **@hono/swagger-ui**: API documentation
 - **PostgreSQL**: Event store (write side)
 - **Redis**: Read models (read side)
 
@@ -73,7 +75,20 @@ Create the database:
 createdb cqrs_oms
 ```
 
-The migrations will run automatically on server start.
+Run migrations manually:
+
+```bash
+# Run pending migrations
+bun run migrate:up
+
+# Rollback last migration
+bun run migrate:down
+
+# Check migration status
+bun run migrate:status
+```
+
+Migrations also run automatically on server start.
 
 ### Redis
 
@@ -95,10 +110,19 @@ bun run start
 
 The server will start on `http://localhost:3000` (or the port specified in the `PORT` environment variable).
 
+## API Documentation
+
+Interactive API documentation is available at:
+- **Swagger UI**: `http://localhost:3000/docs`
+
 ## API Endpoints
 
 ### Health Check
 - `GET /` - Returns API status
+
+### Documentation
+- `GET /docs` - Interactive Swagger UI documentation
+- `GET /openapi.json` - OpenAPI specification (JSON)
 
 ### Orders
 
@@ -123,43 +147,43 @@ The server will start on `http://localhost:3000` (or the port specified in the `
 
 ```
 src/
-├── index.ts                    # Main server with CQRS routes
+├── index.ts                           # Main server with CQRS routes and Swagger UI
 ├── schemas/
-│   └── order.schema.ts        # Zod schemas
-├── utils/
-│   ├── constants.ts           # Configuration
-│   └── logger.ts              # Logging utility
+│   ├── order.schema.ts                # Order Zod schemas (commands, queries, validation)
+│   └── event.schema.ts                # Event payload schemas
 ├── domain/
-│   ├── order.ts               # Order aggregate root
-│   └── events.ts              # Domain event definitions
+│   ├── order.ts                       # Order aggregate root with business logic
+│   └── events.ts                      # Domain event definitions and type guards
 ├── commands/
-│   ├── create-order.command.ts
-│   ├── update-order-status.command.ts
-│   └── handlers/
-│       ├── create-order.handler.ts
-│       └── update-order-status.handler.ts
+│   ├── create-order.ts                # CreateOrderCommand handler
+│   └── update-order-status.ts         # UpdateOrderStatusCommand handler
 ├── queries/
-│   ├── get-order.query.ts
-│   ├── list-orders.query.ts
-│   └── handlers/
-│       ├── get-order.handler.ts
-│       └── list-orders.handler.ts
+│   ├── get-order.ts                   # GetOrderQuery handler
+│   └── list-orders.ts                 # ListOrdersQuery handler
 ├── infrastructure/
-│   ├── event-store.ts         # PostgreSQL event store
-│   ├── event-bus.ts          # Event dispatcher
+│   ├── event-bus.ts                  # Event dispatcher (pub/sub)
 │   ├── database/
-│   │   ├── postgres.ts        # PostgreSQL connection
-│   │   ├── redis.ts           # Redis connection
-│   │   ├── migrations.ts      # Database migrations
+│   │   ├── postgres.ts               # PostgreSQL connection pool
+│   │   ├── redis.ts                  # Redis client
+│   │   ├── migrations.ts              # Migration runner (auto-runs on startup)
+│   │   ├── migrate.ts                # Migration CLI script
+│   │   ├── migration-runner.ts       # Custom migration system with rollback
+│   │   ├── migrations/                # SQL migration files
+│   │   │   ├── README.md
+│   │   │   └── {timestamp}_{name}/
+│   │   │       ├── up.sql            # Migration SQL
+│   │   │       └── down.sql          # Rollback SQL
 │   │   └── repositories/
-│   │       ├── event-store.repository.ts  # PostgreSQL
-│   │       └── read-model.repository.ts  # Redis
+│   │       ├── event-store.repository.ts    # PostgreSQL event store operations
+│   │       └── read-model.repository.ts     # Redis read model operations
 │   ├── projections/
-│   │   └── order-projection.ts  # Builds Redis read models from events
+│   │   └── order-projection.ts        # Builds Redis read models from events
 │   └── utils/
-│       └── event-replay.ts    # Event replay utility
+│       └── event-replay.ts            # Event replay service
 └── utils/
-    └── replay.ts              # Replay script
+    ├── constants.ts                   # Configuration constants
+    ├── logger.ts                      # Logging utility
+    └── replay.ts                      # Event replay CLI script
 ```
 
 ## Example Requests
@@ -209,16 +233,36 @@ curl "http://localhost:3000/orders?status=pending&page=1&limit=10"
 curl "http://localhost:3000/orders?customerId=customer-123"
 ```
 
+## Database Migrations
+
+Custom migration system similar to db-migrate:
+
+```bash
+# Run pending migrations
+bun run migrate:up
+
+# Rollback last migration
+bun run migrate:down
+
+# Rollback last 2 migrations
+bun run migrate:down 2
+
+# Check migration status
+bun run migrate:status
+```
+
+Migrations are stored in `src/infrastructure/database/migrations/` with format `{timestamp}_{description}/` containing `up.sql` and `down.sql` files.
+
 ## Event Replay
 
 To rebuild read models from events (useful after failures or for testing):
 
 ```bash
 # Replay all events
-bun run src/utils/replay.ts
+bun run replay
 
 # Replay events for a specific aggregate
-bun run src/utils/replay.ts {aggregate-id}
+bun run replay {aggregate-id}
 ```
 
 ## How It Works
@@ -245,6 +289,32 @@ bun run src/utils/replay.ts {aggregate-id}
 - **Separation**: Write and read databases completely independent
 - **Scalability**: Can scale Redis separately for read traffic
 - **Optimistic Concurrency**: Prevents race conditions using event versioning
+
+## Development
+
+### Code Quality
+
+```bash
+# Lint code
+bun run lint
+
+# Fix linting issues
+bun run lint:fix
+
+# Format code
+bun run format
+
+# Type check
+bun run type-check
+```
+
+### Project Features
+
+- **ES6 Arrow Functions**: All functions use modern arrow function syntax
+- **Organized Imports**: Imports grouped by category with comments
+- **Custom Migrations**: SQL-based migration system with rollback support
+- **Swagger Documentation**: Interactive API docs at `/docs`
+- **Type Safety**: Full TypeScript with Zod validation
 
 ## Validation
 
