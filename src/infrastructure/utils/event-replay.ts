@@ -43,7 +43,10 @@ export class EventReplayService {
 
       while (true) {
         // Get events in batches
-        const result = await eventStoreRepository.getAllEvents(batchSize, offset);
+        const result = await eventStoreRepository.getAllEvents({
+          limit: batchSize,
+          offset,
+        });
 
         if (result.events.length === 0) {
           break;

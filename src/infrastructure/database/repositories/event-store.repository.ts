@@ -5,15 +5,16 @@ import { postgresPool } from '@/infrastructure/database/postgres';
 // LOGGER
 import logger from '@/utils/logger';
 
-export interface StoredEvent {
+/** Raw row from PostgreSQL (snake_case column names) */
+export interface RawEventRow {
   id: string;
-  aggregateId: string;
-  aggregateType: string;
-  eventType: string;
-  eventVersion: number;
+  aggregate_id: string;
+  aggregate_type: string;
+  event_type: string;
+  event_version: number;
   payload: unknown;
   metadata: unknown;
-  createdAt: Date;
+  created_at: Date | string;
 }
 
 export class EventStoreRepository {
@@ -83,7 +84,7 @@ export class EventStoreRepository {
         [aggregateId],
       );
 
-      return result.rows.map((row: StoredEvent) => this.mapRowToEvent(row));
+      return result.rows.map((row: RawEventRow) => this.mapRowToEvent(row));
     } catch (error) {
       logger.error('Failed to get events', error);
       throw error;
@@ -99,7 +100,7 @@ export class EventStoreRepository {
         [eventType],
       );
 
-      return result.rows.map((row: StoredEvent) => this.mapRowToEvent(row));
+      return result.rows.map((row: RawEventRow) => this.mapRowToEvent(row));
     } catch (error) {
       logger.error('Failed to get events by type', error);
       throw error;
@@ -107,22 +108,70 @@ export class EventStoreRepository {
   }
 
   async getAllEvents(
-    limit?: number,
-    offset?: number,
+    options: {
+      limit?: number;
+      offset?: number;
+      eventType?: string;
+      aggregateId?: string;
+      fromDate?: Date;
+      toDate?: Date;
+    } = {},
   ): Promise<{ events: OrderEvent[]; total: number }> {
     try {
-      const countResult = await postgresPool.query('SELECT COUNT(*) as total FROM event_store');
+      const { limit, offset, eventType, aggregateId, fromDate, toDate } = options;
+
+      // Build WHERE clause
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+      let paramIndex = 1;
+
+      if (eventType) {
+        conditions.push(`event_type = $${paramIndex}`);
+        params.push(eventType);
+        paramIndex++;
+      }
+
+      if (aggregateId) {
+        conditions.push(`aggregate_id = $${paramIndex}`);
+        params.push(aggregateId);
+        paramIndex++;
+      }
+
+      if (fromDate) {
+        conditions.push(`created_at >= $${paramIndex}`);
+        params.push(fromDate);
+        paramIndex++;
+      }
+
+      if (toDate) {
+        conditions.push(`created_at <= $${paramIndex}`);
+        params.push(toDate);
+        paramIndex++;
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      // Count total
+      const countQuery = `SELECT COUNT(*) as total FROM event_store ${whereClause}`;
+      const countResult = await postgresPool.query(countQuery, params);
       const total = parseInt(countResult.rows[0].total, 10);
 
-      const query = limit
-        ? `SELECT * FROM event_store ORDER BY created_at ASC LIMIT $1 OFFSET $2`
-        : `SELECT * FROM event_store ORDER BY created_at ASC`;
+      // Get events
+      let query = `SELECT * FROM event_store ${whereClause} ORDER BY created_at ASC`;
+      if (limit) {
+        query += ` LIMIT $${paramIndex}`;
+        params.push(limit);
+        paramIndex++;
+        if (offset !== undefined) {
+          query += ` OFFSET $${paramIndex}`;
+          params.push(offset);
+        }
+      }
 
-      const params = limit ? [limit, offset || 0] : [];
       const result = await postgresPool.query(query, params);
 
       return {
-        events: result.rows.map((row: StoredEvent) => this.mapRowToEvent(row)),
+        events: result.rows.map((row: RawEventRow) => this.mapRowToEvent(row)),
         total,
       };
     } catch (error) {
@@ -131,15 +180,41 @@ export class EventStoreRepository {
     }
   }
 
-  private mapRowToEvent(row: StoredEvent): OrderEvent {
+  private mapRowToEvent(row: RawEventRow): OrderEvent {
+    // PostgreSQL returns snake_case; parse payload
+    const payload = typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload;
+
+    const occurredAt = row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
+    const occurredAtISO = occurredAt.toISOString();
+
+    // Parse stored metadata if present (JSONB is usually already an object)
+    const storedMetadata =
+      row.metadata == null
+        ? undefined
+        : typeof row.metadata === 'string'
+          ? (JSON.parse(row.metadata) as DomainEvent['metadata'])
+          : (row.metadata as DomainEvent['metadata']);
+
+    // Always expose orderId, eventType, occurredAt for frontend; never null
+    const metadata: DomainEvent['metadata'] & {
+      orderId: string;
+      eventType: string;
+      occurredAt: string;
+    } = {
+      orderId: row.aggregate_id,
+      eventType: row.event_type,
+      occurredAt: occurredAtISO,
+      ...storedMetadata,
+    };
+
     return {
       eventId: row.id,
-      aggregateId: row.aggregateId,
-      eventType: row.eventType as OrderEvent['eventType'],
-      eventVersion: row.eventVersion,
-      occurredAt: row.createdAt,
-      payload: row.payload,
-      metadata: row.metadata as DomainEvent['metadata'],
+      aggregateId: row.aggregate_id,
+      eventType: row.event_type as OrderEvent['eventType'],
+      eventVersion: row.event_version,
+      occurredAt,
+      payload,
+      metadata,
     } as OrderEvent;
   }
 }

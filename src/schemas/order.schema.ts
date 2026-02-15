@@ -62,6 +62,24 @@ export const updateOrderStatusCommandSchema = z.object({
   status: orderStatusEnum,
 });
 
+// List events query schema (for event store / interactive CQRS demo)
+export const listEventsSchema = z.object({
+  page: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val, 10) : 1))
+    .pipe(z.number().int().positive()),
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val, 10) : 50))
+    .pipe(z.number().int().positive().max(500)),
+  eventType: z.string().optional(),
+  aggregateId: z.string().uuid().optional(),
+  fromDate: z.string().datetime().optional(),
+  toDate: z.string().datetime().optional(),
+});
+
 // Query schemas
 export const getOrderQuerySchema = z.object({
   orderId: z.string().uuid(),

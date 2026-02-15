@@ -1,9 +1,10 @@
 // CORE
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { zValidator } from '@hono/zod-validator';
 import { swaggerUI } from '@hono/swagger-ui';
 // UTILS
-import { PORT as port } from '@/utils/constants';
+import { PORT as port, CORS_ORIGIN } from '@/utils/constants';
 import logger from '@/utils/logger';
 // SCHEMAS
 import {
@@ -11,6 +12,7 @@ import {
   updateOrderSchema,
   orderIdSchema,
   listOrdersSchema,
+  listEventsSchema,
   createOrderCommandSchema,
   updateOrderStatusCommandSchema,
   getOrderQuerySchema,
@@ -19,6 +21,7 @@ import {
 // INFRASTRUCTURE
 import { runMigrations } from '@/infrastructure/database/migrations';
 import { orderProjection } from '@/infrastructure/projections/order-projection';
+import { eventStoreRepository } from '@/infrastructure/database/repositories/event-store.repository';
 // COMMANDS
 import { createOrderHandler } from '@/commands/create-order';
 import { updateOrderStatusHandler } from '@/commands/update-order-status';
@@ -27,6 +30,17 @@ import { getOrderHandler } from '@/queries/get-order';
 import { listOrdersHandler } from '@/queries/list-orders';
 
 const app = new Hono();
+
+// CORS – allow frontend origin from env
+app.use(
+  '*',
+  cors({
+    origin: CORS_ORIGIN,
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  }),
+);
 
 // Initialize CQRS infrastructure
 const initialize = async () => {
@@ -244,6 +258,80 @@ app.get('/openapi.json', (c) => {
           },
         },
       },
+      '/events': {
+        get: {
+          summary: 'List events from event store',
+          description: 'Returns events from the event store for the interactive CQRS demo.',
+          tags: ['Event Store'],
+          parameters: [
+            {
+              name: 'page',
+              in: 'query',
+              schema: { type: 'integer', default: 1 },
+              description: 'Page number (1-based)',
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              schema: { type: 'integer', default: 50 },
+              description: 'Max events to return',
+            },
+            {
+              name: 'eventType',
+              in: 'query',
+              schema: { type: 'string' },
+              description: 'Filter by event type (e.g., OrderCreated)',
+            },
+            {
+              name: 'aggregateId',
+              in: 'query',
+              schema: { type: 'string', format: 'uuid' },
+              description: 'Filter by aggregate ID',
+            },
+            {
+              name: 'fromDate',
+              in: 'query',
+              schema: { type: 'string', format: 'date-time' },
+              description: 'Filter events from this date',
+            },
+            {
+              name: 'toDate',
+              in: 'query',
+              schema: { type: 'string', format: 'date-time' },
+              description: 'Filter events until this date',
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Events retrieved',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      message: { type: 'string' },
+                      pagination: {
+                        type: 'object',
+                        properties: {
+                          page: { type: 'integer' },
+                          limit: { type: 'integer' },
+                          total: { type: 'integer' },
+                        },
+                      },
+                      events: {
+                        type: 'array',
+                        items: { type: 'object' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '400': { description: 'Bad request' },
+            '500': { description: 'Internal server error' },
+          },
+        },
+      },
     },
   });
 });
@@ -362,6 +450,68 @@ app.get('/orders', zValidator('query', listOrdersSchema), async (c) => {
     });
   } catch (error) {
     logger.error('Failed to list orders', error);
+    if (error instanceof Error) {
+      return c.json({ error: error.message }, 400);
+    }
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// List events from event store (for interactive CQRS demo)
+app.get('/events', zValidator('query', listEventsSchema), async (c) => {
+  try {
+    const queryParams = c.req.valid('query');
+    const page = queryParams.page || 1;
+    const limit = queryParams.limit || 50;
+    const offset = (page - 1) * limit;
+
+    const fromDate = queryParams.fromDate ? new Date(queryParams.fromDate) : undefined;
+    const toDate = queryParams.toDate ? new Date(queryParams.toDate) : undefined;
+
+    const { events, total } = await eventStoreRepository.getAllEvents({
+      limit,
+      offset,
+      eventType: queryParams.eventType,
+      aggregateId: queryParams.aggregateId,
+      fromDate,
+      toDate,
+    });
+
+    return c.json({
+      message: 'Events retrieved',
+      pagination: {
+        page,
+        limit,
+        total,
+      },
+      events: events.map((e) => {
+        const occurredAtISO =
+          e.occurredAt instanceof Date ? e.occurredAt.toISOString() : e.occurredAt;
+
+        // Extract customerId from payload if it exists (for OrderCreated events)
+        const payload = e.payload as Record<string, unknown>;
+        const customerId = 'customerId' in payload ? (payload.customerId as string) : undefined;
+
+        return {
+          eventId: e.eventId,
+          aggregateId: e.aggregateId,
+          orderId: e.aggregateId, // Alias for easier access
+          eventType: e.eventType,
+          eventVersion: e.eventVersion,
+          occurredAt: occurredAtISO,
+          customerId, // Include customerId if available in payload
+          payload: e.payload,
+          metadata: e.metadata || {
+            orderId: e.aggregateId,
+            eventType: e.eventType,
+            occurredAt: occurredAtISO,
+            ...(customerId && { customerId }), // Include customerId in metadata if available
+          },
+        };
+      }),
+    });
+  } catch (error) {
+    logger.error('Failed to list events', error);
     if (error instanceof Error) {
       return c.json({ error: error.message }, 400);
     }

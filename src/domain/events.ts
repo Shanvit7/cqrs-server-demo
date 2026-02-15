@@ -12,6 +12,9 @@ export interface DomainEvent {
   occurredAt: Date;
   payload: unknown;
   metadata?: {
+    orderId?: string; // Link events to orders (same as aggregateId for order events)
+    eventType?: string; // Event type in metadata for easier querying
+    occurredAt?: string; // ISO timestamp in metadata for sorting
     userId?: string;
     correlationId?: string;
     causationId?: string;

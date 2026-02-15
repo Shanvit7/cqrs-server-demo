@@ -3,6 +3,9 @@ import 'dotenv/config';
 
 export const PORT = process.env.PORT || 3000;
 
+/** Allowed origin for CORS (e.g. frontend URL). Default: http://localhost:5173 */
+export const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
 export const isProduction = process.env.NODE_ENV === 'production';
 
 // PostgreSQL Configuration

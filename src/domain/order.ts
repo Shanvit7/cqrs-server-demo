@@ -52,17 +52,23 @@ export class Order {
     const orderId = randomUUID();
     const order = new Order(orderId, customerId, 'pending', items, totalAmount, 0);
 
+    const occurredAt = new Date();
     const event: OrderCreatedEvent = {
       eventId: randomUUID(),
       aggregateId: orderId,
       eventType: 'OrderCreated',
       eventVersion: 1,
-      occurredAt: new Date(),
+      occurredAt,
       payload: orderCreatedEventSchema.parse({
         customerId,
         items,
         totalAmount,
       }),
+      metadata: {
+        orderId, // Link event to order
+        eventType: 'OrderCreated', // Event type in metadata
+        occurredAt: occurredAt.toISOString(), // Timestamp in metadata for sorting
+      },
     };
 
     order.uncommittedEvents.push(event);
@@ -123,16 +129,22 @@ export class Order {
     const previousStatus = this.status;
     this.status = newStatus;
 
+    const occurredAt = new Date();
     const event: OrderStatusUpdatedEvent = {
       eventId: randomUUID(),
       aggregateId: this.id,
       eventType: 'OrderStatusUpdated',
       eventVersion: this.version + 1,
-      occurredAt: new Date(),
+      occurredAt,
       payload: orderStatusUpdatedEventSchema.parse({
         status: newStatus,
         previousStatus,
       }),
+      metadata: {
+        orderId: this.id, // Link event to order
+        eventType: 'OrderStatusUpdated', // Event type in metadata
+        occurredAt: occurredAt.toISOString(), // Timestamp in metadata for sorting
+      },
     };
 
     this.uncommittedEvents.push(event);
@@ -150,13 +162,19 @@ export class Order {
 
     this.status = 'cancelled';
 
+    const occurredAt = new Date();
     const event: OrderCancelledEvent = {
       eventId: randomUUID(),
       aggregateId: this.id,
       eventType: 'OrderCancelled',
       eventVersion: this.version + 1,
-      occurredAt: new Date(),
+      occurredAt,
       payload: orderCancelledEventSchema.parse({ reason }),
+      metadata: {
+        orderId: this.id, // Link event to order
+        eventType: 'OrderCancelled', // Event type in metadata
+        occurredAt: occurredAt.toISOString(), // Timestamp in metadata for sorting
+      },
     };
 
     this.uncommittedEvents.push(event);
