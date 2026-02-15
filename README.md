@@ -63,6 +63,7 @@ REDIS_PASSWORD=
 # Application
 PORT=3000
 NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173  # Frontend URL for CORS
 ```
 
 ## Database Setup
@@ -142,6 +143,24 @@ Interactive API documentation is available at:
 - `GET /orders` - List orders with pagination (executes ListOrdersQuery)
   - Query params: `page` (optional, default: 1), `limit` (optional, default: 10), `status` (optional), `customerId` (optional)
   - Returns: `{ message: string, pagination: { page, limit, total }, orders: OrderReadModel[] }`
+
+### Event Store
+
+- `GET /events` - List events from event store (for interactive CQRS demo)
+  - Query params: 
+    - `page` (optional, default: 1) - Page number
+    - `limit` (optional, default: 50, max: 500) - Max events per page
+    - `eventType` (optional) - Filter by event type (e.g., "OrderCreated")
+    - `aggregateId` (optional, UUID) - Filter by order ID
+    - `fromDate` (optional, ISO datetime) - Filter events from this date
+    - `toDate` (optional, ISO datetime) - Filter events until this date
+  - Returns: `{ message: string, pagination: { page, limit, total }, events: Event[] }`
+  - Event response includes:
+    - `eventId`, `aggregateId`, `orderId` (alias), `eventType`, `eventVersion`
+    - `occurredAt` (ISO timestamp)
+    - `customerId` (extracted from payload if available)
+    - `payload` (event-specific data)
+    - `metadata` (includes orderId, eventType, occurredAt, customerId)
 
 ## Project Structure
 
@@ -233,9 +252,31 @@ curl "http://localhost:3000/orders?status=pending&page=1&limit=10"
 curl "http://localhost:3000/orders?customerId=customer-123"
 ```
 
+### List Events
+
+```bash
+# List all events
+curl "http://localhost:3000/events"
+
+# List events with pagination
+curl "http://localhost:3000/events?page=1&limit=50"
+
+# Filter by event type
+curl "http://localhost:3000/events?eventType=OrderCreated"
+
+# Filter by order ID
+curl "http://localhost:3000/events?aggregateId={order-uuid}"
+
+# Filter by date range
+curl "http://localhost:3000/events?fromDate=2024-01-01T00:00:00Z&toDate=2024-01-31T23:59:59Z"
+
+# Combined filters
+curl "http://localhost:3000/events?eventType=OrderStatusUpdated&aggregateId={order-uuid}&page=1&limit=20"
+```
+
 ## Database Migrations
 
-Custom migration system similar to db-migrate:
+Migrations run automatically on server start. You can also run them manually:
 
 ```bash
 # Run pending migrations
@@ -244,7 +285,7 @@ bun run migrate:up
 # Rollback last migration
 bun run migrate:down
 
-# Rollback last 2 migrations
+# Rollback last N migrations
 bun run migrate:down 2
 
 # Check migration status
