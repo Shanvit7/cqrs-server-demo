@@ -2,6 +2,19 @@
 
 A demo Order Management System (OMS) built with Bun, Hono, and Zod, demonstrating **CQRS (Command Query Responsibility Segregation)** and **Event Sourcing** patterns.
 
+## Frontend Application
+
+A Vue 3 frontend application that consumes this backend API is available at:
+
+**[cqrs-web-demo](https://github.com/Shanvit7/cqrs-web-demo)** - A Vue 3 frontend application for the CQRS Order Management System (OMS) demo. This frontend demonstrates how to interact with a CQRS + Event Sourcing backend architecture.
+
+The frontend provides:
+- Product catalog and shopping cart
+- Order creation and management
+- Real-time CQRS event stream visualization
+- Admin dashboard with event monitoring
+- Order status tracking and updates
+
 ## Architecture
 
 This project implements a full CQRS + Event Sourcing architecture:
