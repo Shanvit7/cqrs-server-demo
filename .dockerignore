@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# IDE and OS
+.DS_Store
+*.log
+
+# Build output (not needed - Bun runs TS directly)
+dist/
+build/
+
+# Development
+.husky/
+*.md
+!README.md
